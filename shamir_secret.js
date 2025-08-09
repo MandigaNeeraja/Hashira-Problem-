@@ -1,28 +1,88 @@
 const fs = require('fs');
 
 function decodeValue(base, value) {
-    return BigInt(parseInt(value, parseInt(base)));
+    const baseNum = parseInt(base);
+    let result = 0n;
+    const valueStr = value.toString();
+    
+    for (let i = 0; i < valueStr.length; i++) {
+        const digit = valueStr[i];
+        let digitValue;
+        
+        if (digit >= '0' && digit <= '9') {
+            digitValue = parseInt(digit);
+        } else {
+            // Handle hexadecimal digits a-f
+            digitValue = digit.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0) + 10;
+        }
+        
+        result = result * BigInt(baseNum) + BigInt(digitValue);
+    }
+    
+    return result;
+}
+
+// Extended Euclidean Algorithm for modular inverse
+function modInverse(a, m) {
+    if (m === 1n) return 0n;
+    
+    let m0 = m;
+    let x0 = 0n;
+    let x1 = 1n;
+    
+    while (a > 1n) {
+        let q = a / m;
+        let t = m;
+        
+        m = a % m;
+        a = t;
+        t = x0;
+        
+        x0 = x1 - q * x0;
+        x1 = t;
+    }
+    
+    if (x1 < 0n) x1 += m0;
+    
+    return x1;
 }
 
 function lagrangeInterpolationC(points, k) {
-    let c = 0n;
+    // Use a large prime for modular arithmetic
+    const PRIME = 2n ** 256n - 189n; // Large prime for modular arithmetic
+    
+    let result = 0n;
+    
     for (let i = 0; i < k; i++) {
         const xi = BigInt(points[i][0]);
         const yi = points[i][1];
+        
         let numerator = 1n;
         let denominator = 1n;
         
+        // Calculate Lagrange basis polynomial at x=0
         for (let j = 0; j < k; j++) {
             if (i !== j) {
                 const xj = BigInt(points[j][0]);
-                numerator *= (0n - xj);
-                denominator *= (xi - xj);
+                numerator = (numerator * (-xj % PRIME + PRIME)) % PRIME;
+                denominator = (denominator * ((xi - xj) % PRIME + PRIME)) % PRIME;
             }
         }
         
-        c += yi * numerator / denominator;
+        // Calculate modular inverse of denominator
+        const invDenom = modInverse(denominator, PRIME);
+        
+        // Add this term to the result
+        const term = (yi * numerator % PRIME * invDenom % PRIME) % PRIME;
+        result = (result + term) % PRIME;
     }
-    return c;
+    
+    // Convert back to regular integer if it's reasonable
+    if (result > PRIME / 2n) {
+        result = result - PRIME;
+    }
+    
+    return result < 0n ? -result : result;
 }
 
 function findConstantTerm(jsonString) {
@@ -67,19 +127,24 @@ function findConstantTerm(jsonString) {
 
 function main() {
     try {
+        //console.log("Starting...");
         // Read and process test case 1
         const jsonString1 = fs.readFileSync('testcase1.json', 'utf8');
+        //console.log("Processing test case 1...");
         const c1 = findConstantTerm(jsonString1);
 
         // Read and process test case 2
         const jsonString2 = fs.readFileSync('testcase2.json', 'utf8');
+        //console.log("Processing test case 2...");
         const c2 = findConstantTerm(jsonString2);
 
         // Print c for both test cases
+        //console.log("Results:");
         console.log(c1.toString());
         console.log(c2.toString());
     } catch (error) {
         console.error("Error in main:", error.message);
+        console.error("Stack:", error.stack);
     }
 }
 
